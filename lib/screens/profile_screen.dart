@@ -23,8 +23,6 @@ class ProfileScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.security, size: 80, color: Colors.blue),
-            const SizedBox(height: 16),
-            Text('UID: ${user.uid}'),
             const SizedBox(height: 8),
             Text('Email: ${user.email}'),
           ],

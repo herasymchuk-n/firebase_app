@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'profile_screen.dart';
+import '../models/note.dart';
+import '../services/firestore_service.dart';
+import 'note_editor_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   Future<void> _logout(BuildContext context) async {
-    final shouldLogout = await showDialog<bool>(
+    await FirebaseAuth.instance.signOut();
+  }
+
+  void _deleteNote(BuildContext context, FirestoreService service, String id) async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        title: const Text('Delete Note'),
+        content: const Text('Are you sure you want to delete this note?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -18,24 +24,24 @@ class HomeScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Logout'),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
 
-    if (shouldLogout == true) {
-      await FirebaseAuth.instance.signOut();
+    if (confirm == true) {
+      await service.deleteNote(id);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser!;
+    final firestoreService = FirestoreService();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home'),
+        title: const Text('My Notes'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -43,36 +49,53 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.check_circle, size: 100, color: Colors.green),
-              const SizedBox(height: 24),
-              Text(
-                'Hello, ${user.displayName ?? 'User'}!',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                user.email ?? '',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                  );
-                },
-                child: const Text('Go to Protected Profile'),
-              ),
-            ],
-          ),
-        ),
+      body: StreamBuilder<List<Note>>(
+        stream: firestoreService.getNotes(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('No notes yet. Add one!'));
+          }
+
+          final notes = snapshot.data!;
+
+          return ListView.builder(
+            itemCount: notes.length,
+            itemBuilder: (context, index) {
+              final note = notes[index];
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ListTile(
+                  title: Text(note.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(note.content, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NoteEditorScreen(note: note),
+                      ),
+                    );
+                  },
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () => _deleteNote(context, firestoreService, note.id),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NoteEditorScreen()),
+          );
+        },
+        child: const Icon(Icons.add),
       ),
     );
   }
